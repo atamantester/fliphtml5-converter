@@ -5,9 +5,13 @@ Natural sort, dosya keşfi ve diğer utility fonksiyonlar.
 
 import re
 import os
+import shutil
+import logging
 from pathlib import Path
 from typing import List, Tuple, Optional
 import uuid
+
+logger = logging.getLogger(__name__)
 
 
 def generate_job_id() -> str:
@@ -192,7 +196,96 @@ def discover_content(extracted_dir: Path) -> Tuple[List[Path], List[Path], str, 
         sorted_images = sort_images_naturally(all_images)
         return (sorted_images, [], "images", None)
 
+    # 4. SVG dosyalarını ara (JPG de yoksa son çare)
+    svg_files = find_svg_files(extracted_dir)
+    if len(svg_files) >= 2:
+        sorted_svgs = sort_images_naturally(svg_files)
+        return ([], sorted_svgs, "svg", None)
+
     return ([], [], "none", None)
+
+
+def find_svg_files(directory: Path) -> List[Path]:
+    """Sayfa SVG dosyalarını bulur (recursive). UI dizinlerini atlar."""
+    SKIP_DIRS = {'assets', 'skins', 'buttons', 'preloader', 'css', 'js'}
+    svg_files = []
+    if not directory.exists():
+        return svg_files
+    for root, dirs, files in os.walk(directory):
+        root_parts = set(Path(root).parts)
+        if root_parts & SKIP_DIRS:
+            continue
+        for file in files:
+            if file.lower().endswith('.svg'):
+                svg_files.append(Path(root) / file)
+    return svg_files
+
+
+def convert_svgs_to_jpgs(
+    svg_files: List[Path],
+    output_dir: Path,
+    progress_callback=None,
+    log_callback=None
+) -> Tuple[bool, List[Path], str]:
+    """SVG dosyalarını JPG'ye dönüştürür. cairosvg kullanır."""
+
+    def log(msg: str):
+        logger.info(msg)
+        if log_callback:
+            log_callback(msg)
+
+    try:
+        import cairosvg
+    except ImportError:
+        return False, [], "cairosvg kütüphanesi bulunamadı. pip install cairosvg"
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    jpg_files = []
+    errors = []
+    total = len(svg_files)
+
+    log(f"SVG→JPG dönüştürme: {total} dosya")
+
+    for i, svg_path in enumerate(svg_files):
+        if progress_callback:
+            progress_callback(i, total)
+
+        page_num = i + 1
+        jpg_filename = f"page_{page_num:04d}.jpg"
+        jpg_path = output_dir / jpg_filename
+
+        try:
+            # SVG → PNG (cairosvg)
+            png_bytes = cairosvg.svg2png(
+                url=str(svg_path),
+                output_width=1600
+            )
+
+            # PNG → JPG (Pillow)
+            from PIL import Image
+            import io
+            png_img = Image.open(io.BytesIO(png_bytes))
+            png_img.convert('RGB').save(jpg_path, 'JPEG', quality=98)
+            png_img.close()
+
+            jpg_files.append(jpg_path)
+            log(f"✓ Sayfa {page_num}: {svg_path.name} → {jpg_filename}")
+
+        except Exception as e:
+            error_msg = f"Sayfa {page_num} ({svg_path.name}): {str(e)}"
+            errors.append(error_msg)
+            log(f"⚠ {error_msg}")
+
+    if progress_callback:
+        progress_callback(total, total)
+
+    if jpg_files:
+        log(f"✓ Toplam {len(jpg_files)}/{total} SVG dönüştürüldü")
+        if errors:
+            log(f"⚠ {len(errors)} dosya dönüştürülemedi")
+        return True, jpg_files, ""
+    else:
+        return False, [], "Hiçbir SVG dönüştürülemedi.\n" + "\n".join(errors[:5])
 
 
 def ensure_directory(path: Path) -> Path:

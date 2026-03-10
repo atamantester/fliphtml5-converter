@@ -16,7 +16,7 @@ from datetime import datetime
 from extract_utils import extract_exe, check_7zip_available, get_extracted_dir, cleanup_temp_dir
 from swf_utils import convert_multiple_swf_to_jpg, check_ffmpeg_available
 from pdf_utils import create_pdf_from_images
-from utils import discover_content, sort_images_naturally, ensure_directory, format_file_size
+from utils import discover_content, sort_images_naturally, ensure_directory, format_file_size, convert_svgs_to_jpgs
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -286,6 +286,8 @@ def process_exe_file(uploaded_file, book_format: bool, progress_bar, status_text
         log(f"İçerik türü: {content_type}")
         log(f"Bulunan görüntüler: {len(images)}")
         log(f"Bulunan SWF dosyaları: {len(swf_files)}")
+        if content_type == "svg":
+            log(f"Bulunan SVG dosyaları: {len(swf_files)}")
 
         if content_type == "none":
             raise Exception("Çıkarılan dosyalarda görüntü veya SWF bulunamadı")
@@ -310,6 +312,28 @@ def process_exe_file(uploaded_file, book_format: bool, progress_bar, status_text
                     log(f"⚠ Bazı sayfalar dönüştürülemedi, devam ediliyor...")
                 else:
                     raise Exception(f"SWF→JPG dönüştürme hatası: {error}")
+
+        # SVG dönüştürme
+        if content_type == "svg":
+            status_text.text(f"🎨 SVG dönüştürülüyor: {uploaded_file.name}")
+            log("SVG dosyaları JPG'ye dönüştürülüyor...")
+
+            def svg_progress(current, total):
+                if total > 0:
+                    prog = 30 + int((current / total) * 50)
+                    progress_bar.progress(min(prog, 80))
+
+            jpg_output_dir = work_dir / "pages"
+            success, images, error = convert_svgs_to_jpgs(
+                swf_files, jpg_output_dir,
+                progress_callback=svg_progress, log_callback=log
+            )
+
+            if not success or not images:
+                if images:
+                    log(f"⚠ Bazı SVG sayfaları dönüştürülemedi, devam ediliyor...")
+                else:
+                    raise Exception(f"SVG→JPG dönüştürme hatası: {error}")
 
         progress_bar.progress(80)
         total_pages = len(images)
