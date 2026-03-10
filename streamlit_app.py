@@ -640,7 +640,7 @@ if uploaded_files:
         st.divider()
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("🧹 İşleri Temizle ve Yeni Dönüşüm Başlat", use_container_width=True):
+            if st.button("🧹 İşleri Temizle", use_container_width=True):
                 st.session_state["results"] = None
                 st.rerun()
 
