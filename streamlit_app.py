@@ -491,7 +491,7 @@ with st.sidebar:
 
 # ─── Ana İçerik ───
 uploaded_files = st.file_uploader(
-    "📁 FlipHTML5 EXE dosyalarını sürükleyin veya seçin",
+    "📁 FlipHTML5 EXE dosyalarını seçin",
     type=["exe"],
     accept_multiple_files=True,
     help="Birden fazla FlipHTML5 .exe dosyası yükleyebilirsiniz (maks. 500 MB / dosya)"
@@ -656,6 +656,6 @@ else:
         <div style="text-align: center; padding: 3rem 2rem; border: 2px dashed #333; border-radius: 16px; background: rgba(255,107,53,0.02);">
             <div style="font-size: 4rem; margin-bottom: 1rem;">📄</div>
             <h3 style="color: #ccc; margin-bottom: 0.5rem;">EXE dosyalarını yükleyin</h3>
-            <p style="color: #666;">Birden fazla FlipHTML5 .exe dosyasını sürükleyin<br/>veya <strong>Browse files</strong> butonuna tıklayın</p>
+            <p style="color: #666;">FlipHTML5 .exe dosyalarını <strong>Browse files</strong> butonuyla seçin</p>
         </div>
         """, unsafe_allow_html=True)
