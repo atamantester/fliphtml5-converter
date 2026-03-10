@@ -9,6 +9,7 @@ import shutil
 import logging
 import zipfile
 import io
+import hashlib
 from pathlib import Path
 from datetime import datetime
 
@@ -20,6 +21,78 @@ from utils import discover_content, sort_images_naturally, ensure_directory, for
 # Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def check_password():
+    """Kullanıcı kimlik doğrulaması. True dönerse giriş başarılı."""
+
+    if st.session_state.get("authenticated"):
+        return True
+
+    # Login sayfası
+    st.markdown("""
+    <style>
+        .login-container {
+            max-width: 420px;
+            margin: 5rem auto;
+            padding: 2.5rem;
+            background: linear-gradient(135deg, #1a1f2e 0%, #252b3b 100%);
+            border: 1px solid #333;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .login-title {
+            background: linear-gradient(135deg, #FF6B35 0%, #F7931E 50%, #FFD700 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 1.8rem;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 0.3rem;
+        }
+        .login-subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+        .login-icon {
+            text-align: center;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        st.markdown('<div class="login-icon">🔐</div>', unsafe_allow_html=True)
+        st.markdown('<h2 class="login-title">FlipHTML5 Converter</h2>', unsafe_allow_html=True)
+        st.markdown('<p class="login-subtitle">Devam etmek için giriş yapın</p>', unsafe_allow_html=True)
+
+        with st.form("login_form"):
+            username = st.text_input("👤 Kullanıcı Adı", placeholder="Kullanıcı adınız")
+            password = st.text_input("🔑 Şifre", type="password", placeholder="Şifreniz")
+            submit = st.form_submit_button("🚀 Giriş Yap", use_container_width=True, type="primary")
+
+            if submit:
+                if not username or not password:
+                    st.error("❌ Kullanıcı adı ve şifre gerekli")
+                    return False
+
+                expected_user = st.secrets["auth"]["username"]
+                expected_hash = st.secrets["auth"]["password_hash"]
+                input_hash = hashlib.sha256(password.encode()).hexdigest()
+
+                if username == expected_user and input_hash == expected_hash:
+                    st.session_state["authenticated"] = True
+                    st.session_state["username"] = username
+                    st.rerun()
+                else:
+                    st.error("❌ Kullanıcı adı veya şifre hatalı")
+                    return False
+
+    return False
 
 # ─── Sayfa Ayarları ───
 st.set_page_config(
@@ -294,11 +367,22 @@ def process_exe_file(uploaded_file, book_format: bool, progress_bar, status_text
 # ANA UYGULAMA
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Auth kontrolü — giriş yapılmadıysa login formu göster
+if not check_password():
+    st.stop()
+
 st.markdown('<h1 class="main-title">📄 FlipHTML5 EXE → PDF</h1>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">FlipHTML5 offline EXE dosyalarınızı PDF\'e dönüştürün</p>', unsafe_allow_html=True)
 
 # ─── Sidebar ───
 with st.sidebar:
+    st.markdown(f"👤 **{st.session_state.get('username', '')}**")
+    if st.button("🚪 Çıkış Yap", use_container_width=True):
+        st.session_state["authenticated"] = False
+        st.session_state["username"] = ""
+        st.rerun()
+
+    st.divider()
     st.markdown("### ⚙️ Ayarlar")
 
     book_format = st.toggle(
