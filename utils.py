@@ -58,11 +58,17 @@ def find_images_in_directory(directory: Path, recursive: bool = True) -> List[Pa
 
 
 def find_swf_files(directory: Path) -> List[Path]:
-    """Belirtilen dizinde SWF dosyalarını bulur (recursive)."""
+    """Belirtilen dizinde sayfa SWF dosyalarını bulur (recursive).
+    UI/skin SWF'lerini atlar (assets, skins, buttons dizinleri)."""
+    SKIP_DIRS = {'assets', 'skins', 'buttons', 'preloader', 'css', 'js'}
     swf_files = []
     if not directory.exists():
         return swf_files
     for root, dirs, files in os.walk(directory):
+        # UI dizinlerini atla
+        root_parts = set(Path(root).parts)
+        if root_parts & SKIP_DIRS:
+            continue
         for file in files:
             if file.lower().endswith('.swf'):
                 swf_files.append(Path(root) / file)
@@ -148,7 +154,7 @@ def discover_content(extracted_dir: Path) -> Tuple[List[Path], List[Path], str, 
             return ([], sorted_swf, "swf", swf_folder)
 
     swf_files = find_swf_files(extracted_dir)
-    if swf_files:
+    if len(swf_files) >= 2:  # Tek SWF muhtemelen UI bileşeni, en az 2 sayfa olmalı
         sorted_swf = sort_images_naturally(swf_files)
         return ([], sorted_swf, "swf", None)
 
