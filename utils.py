@@ -106,9 +106,13 @@ def find_swf_folder(extracted_dir: Path) -> Optional[Path]:
 def find_page_images_folder(extracted_dir: Path) -> Optional[Path]:
     """Çıkarılmış dizinde sayfa görüntülerinin bulunduğu klasörü tespit eder."""
     possible_folders = [
+        'files/pages/thumbs',
+        'files/pages/jpg',
         'files/mobile',
         'files/page',
         'files/pages',
+        'pages/thumbs',
+        'pages/jpg',
         'mobile',
         'pages',
         'page',
@@ -139,26 +143,41 @@ def find_page_images_folder(extracted_dir: Path) -> Optional[Path]:
     return None
 
 
+def _are_swfs_real_pages(swf_files: List[Path], min_size: int = 10000) -> bool:
+    """SWF dosyalarının gerçek sayfa içeriği mi yoksa placeholder mı olduğunu kontrol eder.
+    Gerçek sayfa SWF'leri genellikle 100KB+ olur, placeholder'lar 1-5KB olur."""
+    if not swf_files:
+        return False
+    sizes = [f.stat().st_size for f in swf_files]
+    avg_size = sum(sizes) / len(sizes)
+    # Ortalama boyut 10KB'dan küçükse, bunlar placeholder SWF'lerdir
+    return avg_size >= min_size
+
+
 def discover_content(extracted_dir: Path) -> Tuple[List[Path], List[Path], str, Optional[Path]]:
     """
     Çıkarılmış dizinde içeriği keşfeder.
-    Öncelik: SWF > Görüntüler (SWF yüksek kaliteli sayfa, JPG sadece thumbnail)
+    Mantık: SWF dosyaları varsa boyutlarını kontrol et — gerçek sayfa mı placeholder mı?
+    Placeholder SWF'lerse (küçük boyut), JPG'leri kullan.
     Returns: Tuple (görüntü_listesi, swf_listesi, kaynak_türü, swf_klasörü)
     """
-    # 1. Önce SWF dosyalarını ara (yüksek kaliteli sayfa içeriği)
+    # 1. Sayfa SWF klasörünü ara (pages/swf/ vb.)
     swf_folder = find_swf_folder(extracted_dir)
     if swf_folder:
         swf_files = list(swf_folder.glob('*.swf'))
-        if swf_files:
+        if swf_files and _are_swfs_real_pages(swf_files):
             sorted_swf = sort_images_naturally(swf_files)
             return ([], sorted_swf, "swf", swf_folder)
+        # SWF'ler placeholder — aynı dizin yapısında JPG ara
+        # (pages/ altında jpg/ veya mobile/ olabilir)
 
+    # 2. Genel SWF taraması (assets/skins hariç)
     swf_files = find_swf_files(extracted_dir)
-    if len(swf_files) >= 2:  # Tek SWF muhtemelen UI bileşeni, en az 2 sayfa olmalı
+    if len(swf_files) >= 2 and _are_swfs_real_pages(swf_files):
         sorted_swf = sort_images_naturally(swf_files)
         return ([], sorted_swf, "swf", None)
 
-    # 2. SWF yoksa görüntüleri ara (fallback)
+    # 3. Görüntüleri ara (SWF yok veya placeholder SWF'ler)
     page_folder = find_page_images_folder(extracted_dir)
     if page_folder:
         images = find_images_in_directory(page_folder, recursive=False)
