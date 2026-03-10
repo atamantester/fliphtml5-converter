@@ -514,22 +514,11 @@ if uploaded_files:
 
     st.markdown("")
 
-    # ─── Başlat / Temizle Butonları ───
+    # ─── Başlat Butonu ───
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.session_state.get("results"):
-            # Sonuçlar varsa temizle butonu göster
-            c_start, c_clear = st.columns(2)
-            with c_start:
-                btn_label = f"🚀 Yeniden Başlat" if file_count > 1 else "🚀 Yeniden Başlat"
-                convert_button = st.button(btn_label, use_container_width=True, type="primary")
-            with c_clear:
-                if st.button("🗑️ Temizle", use_container_width=True):
-                    st.session_state["results"] = None
-                    st.rerun()
-        else:
-            btn_label = f"🚀 İşleri Başlat ({file_count} dosya)" if file_count > 1 else "🚀 Dönüştürmeyi Başlat"
-            convert_button = st.button(btn_label, use_container_width=True, type="primary")
+        btn_label = f"🚀 İşleri Başlat ({file_count} dosya)" if file_count > 1 else "🚀 Dönüştürmeyi Başlat"
+        convert_button = st.button(btn_label, use_container_width=True, type="primary")
 
     # ─── Dönüştürme İşlemi ───
     if convert_button:
@@ -645,6 +634,15 @@ if uploaded_files:
                         mime="application/pdf", use_container_width=True, type="primary",
                         key="dl_single"
                     )
+
+        # ─── İşleri Temizle ───
+        st.markdown("")
+        st.divider()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🧹 İşleri Temizle ve Yeni Dönüşüm Başlat", use_container_width=True):
+                st.session_state["results"] = None
+                st.rerun()
 
 else:
     # Dosya kaldırıldığında sonuçları temizle
