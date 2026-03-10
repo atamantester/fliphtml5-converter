@@ -514,22 +514,32 @@ if uploaded_files:
 
     st.markdown("")
 
-    # ─── Başlat Butonu ───
+    # ─── Başlat / Temizle Butonları ───
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        btn_label = f"🚀 İşleri Başlat ({file_count} dosya)" if file_count > 1 else "🚀 Dönüştürmeyi Başlat"
-        convert_button = st.button(btn_label, use_container_width=True, type="primary")
+        if st.session_state.get("results"):
+            # Sonuçlar varsa temizle butonu göster
+            c_start, c_clear = st.columns(2)
+            with c_start:
+                btn_label = f"🚀 Yeniden Başlat" if file_count > 1 else "🚀 Yeniden Başlat"
+                convert_button = st.button(btn_label, use_container_width=True, type="primary")
+            with c_clear:
+                if st.button("🗑️ Temizle", use_container_width=True):
+                    st.session_state["results"] = None
+                    st.rerun()
+        else:
+            btn_label = f"🚀 İşleri Başlat ({file_count} dosya)" if file_count > 1 else "🚀 Dönüştürmeyi Başlat"
+            convert_button = st.button(btn_label, use_container_width=True, type="primary")
 
+    # ─── Dönüştürme İşlemi ───
     if convert_button:
         st.divider()
         results = []
 
-        # Genel ilerleme
         overall_status = st.empty()
         overall_progress = st.progress(0)
         st.markdown("")
 
-        # Her dosyayı sırayla işle
         for file_idx, uploaded_file in enumerate(uploaded_files):
             overall_status.text(f"📂 İş {file_idx + 1}/{file_count}: {uploaded_file.name}")
             overall_progress.progress(int((file_idx / file_count) * 100))
@@ -563,7 +573,12 @@ if uploaded_files:
         overall_progress.progress(100)
         overall_status.text("✅ Tüm işler tamamlandı!")
 
-        # ━━━ SONUÇLAR ━━━
+        # Sonuçları session_state'e kaydet
+        st.session_state["results"] = results
+
+    # ━━━ SONUÇLAR (session_state'ten oku) ━━━
+    results = st.session_state.get("results")
+    if results:
         st.divider()
         st.markdown("### 📊 Sonuçlar")
 
@@ -601,7 +616,7 @@ if uploaded_files:
 
         st.markdown(f"""
         <div class="status-card {'success' if not failed else ''}">
-            <p>✅ <strong>{len(successful)}/{file_count}</strong> başarılı · 📄 <strong>{total_pages_all}</strong> sayfa · 💾 <strong>{format_file_size(total_size_all)}</strong></p>
+            <p>✅ <strong>{len(successful)}/{len(results)}</strong> başarılı · 📄 <strong>{total_pages_all}</strong> sayfa · 💾 <strong>{format_file_size(total_size_all)}</strong></p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -619,17 +634,23 @@ if uploaded_files:
                     st.download_button(
                         f"📦 Tümünü İndir (ZIP · {format_file_size(zip_buffer.getbuffer().nbytes)})",
                         data=zip_buffer, file_name="fliphtml5_pdfs.zip",
-                        mime="application/zip", use_container_width=True, type="primary"
+                        mime="application/zip", use_container_width=True, type="primary",
+                        key="dl_zip"
                     )
                 else:
                     r = successful[0]
                     st.download_button(
                         f"📄 PDF İndir ({format_file_size(r['size'])})",
                         data=r["pdf_bytes"], file_name=r["filename"],
-                        mime="application/pdf", use_container_width=True, type="primary"
+                        mime="application/pdf", use_container_width=True, type="primary",
+                        key="dl_single"
                     )
 
 else:
+    # Dosya kaldırıldığında sonuçları temizle
+    if st.session_state.get("results"):
+        st.session_state["results"] = None
+
     st.markdown("")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
