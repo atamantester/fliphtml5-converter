@@ -204,7 +204,8 @@ def create_pdf_from_images(
     output_path: Path,
     log_callback=None,
     progress_callback=None,
-    book_format: bool = True
+    book_format: bool = True,
+    jpeg_quality: int = 98
 ) -> Tuple[bool, str]:
     """Görüntü listesinden PDF oluşturur."""
 

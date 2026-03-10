@@ -222,7 +222,7 @@ def check_system_tools():
     return tools
 
 
-def process_exe_file(uploaded_file, book_format: bool, progress_bar, status_text, log_container):
+def process_exe_file(uploaded_file, book_format: bool, quality_settings: dict, progress_bar, status_text, log_container):
     """Yüklenen EXE dosyasını işler."""
     logs = []
 
@@ -343,6 +343,30 @@ def process_exe_file(uploaded_file, book_format: bool, progress_bar, status_text
         status_text.text(f"📄 PDF oluşturuluyor: {uploaded_file.name}")
         log(f"PDF oluşturuluyor: {format_text} formatı")
 
+        # Kalite ayarlarına göre resimleri işle
+        jpeg_quality = quality_settings.get("jpeg_quality", 98)
+        max_width = quality_settings.get("max_width")
+
+        if max_width:
+            log(f"Kalite ayarı: JPEG %{jpeg_quality}, maks genişlik {max_width}px")
+            from PIL import Image as PILImage
+            processed_images = []
+            for img_path in images:
+                try:
+                    with PILImage.open(img_path) as img:
+                        if img.width > max_width:
+                            ratio = max_width / img.width
+                            new_size = (max_width, int(img.height * ratio))
+                            img = img.resize(new_size, PILImage.Resampling.LANCZOS)
+                        resized_path = img_path.parent / f"q_{img_path.name}"
+                        img.convert('RGB').save(resized_path, 'JPEG', quality=jpeg_quality)
+                        processed_images.append(resized_path)
+                except Exception:
+                    processed_images.append(img_path)
+            images = processed_images
+        else:
+            log(f"Kalite ayarı: Orijinal kalite")
+
         output_filename = Path(uploaded_file.name).stem + ".pdf"
         output_path = temp_dir / output_filename
 
@@ -355,7 +379,8 @@ def process_exe_file(uploaded_file, book_format: bool, progress_bar, status_text
             images, output_path,
             log_callback=log,
             progress_callback=pdf_progress,
-            book_format=book_format
+            book_format=book_format,
+            jpeg_quality=jpeg_quality
         )
 
         if not success:
@@ -419,6 +444,21 @@ with st.sidebar:
         st.info("📖 **Kitap formatı** aktif\n\nKapak tek sayfa, iç sayfalar yan yana birleştirilecek (InDesign spread)")
     else:
         st.info("📄 **Tek sayfa formatı** aktif\n\nHer sayfa bağımsız olarak PDF'e eklenecek")
+
+    quality_option = st.selectbox(
+        "🎨 Görüntü Kalitesi",
+        options=["Orijinal", "Yüksek", "Orta", "Düşük"],
+        index=0,
+        help="Orijinal: Değişiklik yok. Yüksek: %95 kalite. Orta: %85 kalite, maks 1600px. Düşük: %70 kalite, maks 1200px."
+    )
+
+    quality_settings = {
+        "Orijinal": {"jpeg_quality": 98, "max_width": None},
+        "Yüksek":   {"jpeg_quality": 95, "max_width": None},
+        "Orta":     {"jpeg_quality": 85, "max_width": 1600},
+        "Düşük":    {"jpeg_quality": 70, "max_width": 1200},
+    }
+    selected_quality = quality_settings[quality_option]
 
     st.divider()
 
@@ -525,7 +565,7 @@ if uploaded_files:
 
             try:
                 pdf_bytes, output_filename, total_pages, pdf_size = process_exe_file(
-                    uploaded_file, book_format, progress_bar, status_text, log_container
+                    uploaded_file, book_format, selected_quality, progress_bar, status_text, log_container
                 )
 
                 results.append({
