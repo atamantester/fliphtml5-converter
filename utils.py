@@ -106,8 +106,10 @@ def find_swf_folder(extracted_dir: Path) -> Optional[Path]:
 def find_page_images_folder(extracted_dir: Path) -> Optional[Path]:
     """Çıkarılmış dizinde sayfa görüntülerinin bulunduğu klasörü tespit eder."""
     possible_folders = [
+        'files/pages/svg',
         'files/pages/thumbs',
         'files/pages/jpg',
+        'files/pages/large',
         'files/mobile',
         'files/page',
         'files/pages',
