@@ -110,6 +110,15 @@ def find_swf_folder(extracted_dir: Path) -> Optional[Path]:
 def find_page_images_folder(extracted_dir: Path) -> Optional[Path]:
     """Çıkarılmış dizinde sayfa görüntülerinin bulunduğu klasörü tespit eder."""
     possible_folders = [
+        # offline/ prefix (FlipHTML5 standart yapısı)
+        'offline/files/pages/svg',
+        'offline/files/pages/thumbs',
+        'offline/files/pages/jpg',
+        'offline/files/pages/large',
+        'offline/files/mobile',
+        'offline/files/page',
+        'offline/files/pages',
+        # prefix'siz
         'files/pages/svg',
         'files/pages/thumbs',
         'files/pages/jpg',
@@ -119,6 +128,7 @@ def find_page_images_folder(extracted_dir: Path) -> Optional[Path]:
         'files/pages',
         'pages/thumbs',
         'pages/jpg',
+        'pages/svg',
         'mobile',
         'pages',
         'page',
