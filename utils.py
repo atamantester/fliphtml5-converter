@@ -136,10 +136,11 @@ def find_page_images_folder(extracted_dir: Path) -> Optional[Path]:
 def discover_content(extracted_dir: Path) -> Tuple[List[Path], List[Path], str, Optional[Path]]:
     """
     Çıkarılmış dizinde içeriği keşfeder.
+    Öncelik: SWF > Görüntüler (SWF yüksek kaliteli sayfa, JPG sadece thumbnail)
     Returns: Tuple (görüntü_listesi, swf_listesi, kaynak_türü, swf_klasörü)
     """
+    # 1. Önce SWF dosyalarını ara (yüksek kaliteli sayfa içeriği)
     swf_folder = find_swf_folder(extracted_dir)
-
     if swf_folder:
         swf_files = list(swf_folder.glob('*.swf'))
         if swf_files:
@@ -151,6 +152,7 @@ def discover_content(extracted_dir: Path) -> Tuple[List[Path], List[Path], str, 
         sorted_swf = sort_images_naturally(swf_files)
         return ([], sorted_swf, "swf", None)
 
+    # 2. SWF yoksa görüntüleri ara (fallback)
     page_folder = find_page_images_folder(extracted_dir)
     if page_folder:
         images = find_images_in_directory(page_folder, recursive=False)

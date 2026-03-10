@@ -110,7 +110,7 @@ def create_spread_image(
             spread.paste(right_img, (0, 0))
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        spread.save(output_path, 'JPEG', quality=90, optimize=False)
+        spread.save(output_path, 'JPEG', quality=98, optimize=False)
 
         if left_img:
             left_img.close()
@@ -333,9 +333,9 @@ def process_image_for_pdf(
             if mode == 'RGBA':
                 background = Image.new('RGB', img.size, (255, 255, 255))
                 background.paste(img, mask=img.split()[3])
-                background.save(temp_path, 'JPEG', quality=95)
+                background.save(temp_path, 'JPEG', quality=98)
             else:
-                img.convert('RGB').save(temp_path, 'JPEG', quality=95)
+                img.convert('RGB').save(temp_path, 'JPEG', quality=98)
 
             return temp_path
 

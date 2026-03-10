@@ -110,12 +110,10 @@ def convert_swf_to_jpg_ffdec(
     swf_path: Path,
     output_path: Path,
     ffdec_path: Optional[Path] = None,
-    scale: int = 1600,
-    quality: int = 85,
     timeout: int = 120,
     log_callback=None
 ) -> Tuple[bool, Optional[Path], str]:
-    """JPEXS FFDec kullanarak SWF'i JPG'ye dönüştürür."""
+    """JPEXS FFDec kullanarak SWF'i JPG'ye dönüştürür. Orijinal kalite korunur."""
 
     def log(msg: str):
         logger.info(msg)
@@ -137,56 +135,91 @@ def convert_swf_to_jpg_ffdec(
     temp_export_dir = output_dir / f"ffdec_export_{swf_path.stem}"
     temp_export_dir.mkdir(exist_ok=True)
 
-    try:
-        cmd = [
-            "java",
-            "-jar", str(ffdec_path),
-            "-export", "image",
-            str(temp_export_dir),
-            str(swf_path)
-        ]
+    # Denenecek export modları: image (gömülü bitmap - FlipHTML5 için en iyi), sonra frame (render)
+    export_modes = ["image", "frame"]
+    MIN_VALID_SIZE = 50000  # 50KB altı muhtemelen boş/blank bir render
 
-        log(f"FFDec çalıştırılıyor: {swf_path.name}")
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
-
-        if result.returncode != 0:
-            error_msg = result.stderr if result.stderr else f"FFDec çıkış kodu: {result.returncode}"
-            return False, None, error_msg
-
-        exported_images = list(temp_export_dir.glob("*.png")) + list(temp_export_dir.glob("*.jpg"))
-
-        if not exported_images:
-            return False, None, "FFDec resim export edemedi"
-
-        first_image = sorted(exported_images)[0]
-
+    for mode in export_modes:
         try:
-            from PIL import Image
-            with Image.open(first_image) as img:
-                if img.width > scale:
-                    ratio = scale / img.width
-                    new_size = (scale, int(img.height * ratio))
-                    img = img.resize(new_size, Image.Resampling.LANCZOS)
-                img.convert('RGB').save(output_path, 'JPEG', quality=quality)
-            return True, output_path, ""
+            cmd = [
+                "java",
+                "-jar", str(ffdec_path),
+                "-export", mode,
+                str(temp_export_dir),
+                str(swf_path)
+            ]
+
+            log(f"FFDec çalıştırılıyor ({mode}): {swf_path.name}")
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr[:200] if result.stderr else f"FFDec çıkış kodu: {result.returncode}"
+                log(f"FFDec {mode} hatası: {error_msg}")
+                continue  # Bir sonraki modu dene
+
+            # Export edilen dosyaları recursive ara (alt dizinlerde olabilir)
+            exported_images = []
+            for ext in ['*.png', '*.jpg', '*.jpeg', '*.bmp']:
+                exported_images.extend(temp_export_dir.rglob(ext))
+
+            if not exported_images:
+                log(f"FFDec {mode}: resim export edemedi, sonraki mod deneniyor...")
+                continue  # Bir sonraki modu dene
+
+            # En büyük resmi seç (en kaliteli olan)
+            best_image = max(exported_images, key=lambda p: p.stat().st_size)
+            best_size = best_image.stat().st_size
+            log(f"FFDec {mode}: {len(exported_images)} resim bulundu, en iyi: {best_image.name} ({best_size} bytes)")
+
+            # Minimum boyut kontrolü (boş/blank render'ları reddet)
+            if best_size < MIN_VALID_SIZE:
+                log(f"FFDec {mode}: resim çok küçük ({best_size} bytes < {MIN_VALID_SIZE}), sonraki mod deneniyor...")
+                continue
+
+            try:
+                # Orijinal JPG ise doğrudan kopyala (yeniden encode etme)
+                if best_image.suffix.lower() in ['.jpg', '.jpeg']:
+                    shutil.copy2(best_image, output_path)
+                    return True, output_path, ""
+                else:
+                    # PNG/BMP ise yüksek kalitede JPG'ye dönüştür
+                    from PIL import Image
+                    with Image.open(best_image) as img:
+                        img.convert('RGB').save(output_path, 'JPEG', quality=98)
+                    return True, output_path, ""
+            except Exception as e:
+                log(f"FFDec görüntü işleme hatası: {str(e)}")
+                continue
+
+        except subprocess.TimeoutExpired:
+            log(f"FFDec {mode} zaman aşımı ({timeout}s)")
+            continue
         except Exception as e:
-            return False, None, f"Görüntü dönüştürme hatası: {str(e)}"
+            log(f"FFDec {mode} hatası: {str(e)}")
+            continue
+        finally:
+            # Her mod denemesi sonrası temp'i temizle
+            try:
+                for item in temp_export_dir.iterdir():
+                    if item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+                    else:
+                        item.unlink(missing_ok=True)
+            except:
+                pass
 
-    except subprocess.TimeoutExpired:
-        return False, None, f"FFDec zaman aşımı ({timeout}s)"
-    except Exception as e:
-        return False, None, f"FFDec hatası: {str(e)}"
-    finally:
-        try:
-            shutil.rmtree(temp_export_dir, ignore_errors=True)
-        except:
-            pass
+    # Tüm modlar başarısız
+    try:
+        shutil.rmtree(temp_export_dir, ignore_errors=True)
+    except:
+        pass
+    return False, None, "FFDec tüm export modları başarısız"
 
 
 def convert_swf_to_jpg_ffmpeg(
@@ -315,7 +348,7 @@ def convert_multiple_swf_to_jpg(
 
         if ffdec_path and has_java:
             success, result_path, error = convert_swf_to_jpg_ffdec(
-                swf_path, jpg_path, ffdec_path, scale, quality, timeout, log_callback
+                swf_path, jpg_path, ffdec_path, timeout, log_callback
             )
             if success:
                 log(f"✓ Sayfa {page_num}: {swf_path.name} → {jpg_filename} (FFDec)")
