@@ -499,75 +499,51 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     file_count = len(uploaded_files)
-    total_size = sum(len(f.getbuffer()) for f in uploaded_files)
 
-    # Dosya bilgisi
-    col1, col2, col3 = st.columns(3)
-    with col1:
+    # ─── İş Listesi ───
+    st.markdown("### 📋 İş Listesi")
+    for i, f in enumerate(uploaded_files):
+        size_str = format_file_size(len(f.getbuffer()))
         st.markdown(f"""
-        <div class="stat-box">
-            <div class="stat-number">{file_count}</div>
-            <div class="stat-label">Dosya</div>
+        <div class="queue-item">
+            <span style="color: #FF6B35; font-weight: 700; min-width: 28px;">{i+1}.</span>
+            <span style="flex: 1;">{f.name}</span>
+            <span style="color: #888; font-size: 0.85rem;">{size_str}</span>
         </div>
         """, unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"""
-        <div class="stat-box">
-            <div class="stat-number">{format_file_size(total_size)}</div>
-            <div class="stat-label">Toplam Boyut</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col3:
-        st.markdown(f"""
-        <div class="stat-box">
-            <div class="stat-number">{'📖' if book_format else '📄'}</div>
-            <div class="stat-label">{'Kitap Formatı' if book_format else 'Tek Sayfa'}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Dosya listesi
-    if file_count > 1:
-        with st.expander(f"📋 Yüklenen Dosyalar ({file_count})", expanded=False):
-            for i, f in enumerate(uploaded_files):
-                st.text(f"  {i+1}. {f.name} ({format_file_size(len(f.getbuffer()))})")
 
     st.markdown("")
 
-    # Dönüştür butonu
-    convert_col1, convert_col2, convert_col3 = st.columns([1, 2, 1])
-    with convert_col2:
-        btn_label = f"🚀 {file_count} Dosyayı Dönüştür" if file_count > 1 else "🚀 Dönüştürmeyi Başlat"
+    # ─── Başlat Butonu ───
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        btn_label = f"🚀 İşleri Başlat ({file_count} dosya)" if file_count > 1 else "🚀 Dönüştürmeyi Başlat"
         convert_button = st.button(btn_label, use_container_width=True, type="primary")
 
     if convert_button:
         st.divider()
-
-        results = []  # (pdf_bytes, filename, pages, size, success)
+        results = []
 
         # Genel ilerleme
-        if file_count > 1:
-            overall_status = st.empty()
-            overall_progress = st.progress(0)
+        overall_status = st.empty()
+        overall_progress = st.progress(0)
+        st.markdown("")
 
+        # Her dosyayı sırayla işle
         for file_idx, uploaded_file in enumerate(uploaded_files):
-            if file_count > 1:
-                overall_status.text(f"📂 Dosya {file_idx + 1}/{file_count}: {uploaded_file.name}")
-                overall_progress.progress(int((file_idx / file_count) * 100))
-
-            # Her dosya için ayrı bölüm
-            st.markdown(f"### {'📄' if file_count == 1 else f'📄 [{file_idx+1}/{file_count}]'} {uploaded_file.name}")
+            overall_status.text(f"📂 İş {file_idx + 1}/{file_count}: {uploaded_file.name}")
+            overall_progress.progress(int((file_idx / file_count) * 100))
 
             status_text = st.empty()
             progress_bar = st.progress(0)
 
-            with st.expander("📋 İşlem Logları", expanded=(file_count == 1)):
+            with st.expander(f"📋 Log: {uploaded_file.name}", expanded=False):
                 log_container = st.empty()
 
             try:
                 pdf_bytes, output_filename, total_pages, pdf_size = process_exe_file(
                     uploaded_file, book_format, selected_quality, progress_bar, status_text, log_container
                 )
-
                 results.append({
                     "success": True,
                     "pdf_bytes": pdf_bytes,
@@ -576,24 +552,6 @@ if uploaded_files:
                     "size": pdf_size,
                     "original_name": uploaded_file.name
                 })
-
-                st.markdown(f"""
-                <div class="status-card success">
-                    <h4>✅ {output_filename}</h4>
-                    <p>📊 {total_pages} sayfa • {format_file_size(pdf_size)}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # Tek dosya indirme butonu
-                st.download_button(
-                    label=f"⬇️ {output_filename} ({format_file_size(pdf_size)})",
-                    data=pdf_bytes,
-                    file_name=output_filename,
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key=f"dl_{file_idx}"
-                )
-
             except Exception as e:
                 results.append({
                     "success": False,
@@ -602,54 +560,74 @@ if uploaded_files:
                     "original_name": uploaded_file.name
                 })
 
-                st.markdown(f"""
-                <div class="status-card error">
-                    <h4>❌ {uploaded_file.name}</h4>
-                    <p>{str(e)}</p>
-                </div>
-                """, unsafe_allow_html=True)
+        overall_progress.progress(100)
+        overall_status.text("✅ Tüm işler tamamlandı!")
 
-            st.markdown("---")
+        # ━━━ SONUÇLAR ━━━
+        st.divider()
+        st.markdown("### 📊 Sonuçlar")
 
-        # Genel ilerleme tamamla
-        if file_count > 1:
-            overall_progress.progress(100)
-
-        # ─── Özet ───
         successful = [r for r in results if r["success"]]
         failed = [r for r in results if not r["success"]]
 
+        for i, r in enumerate(results):
+            if r["success"]:
+                c1, c2, c3, c4 = st.columns([0.5, 3, 2, 2])
+                with c1:
+                    st.markdown("✅")
+                with c2:
+                    st.markdown(f"**{r['filename']}**")
+                with c3:
+                    st.caption(f"{r['pages']} sayfa · {format_file_size(r['size'])}")
+                with c4:
+                    st.download_button(
+                        "⬇️ İndir", data=r["pdf_bytes"],
+                        file_name=r["filename"], mime="application/pdf",
+                        use_container_width=True, key=f"dl_{i}"
+                    )
+            else:
+                c1, c2, c3, c4 = st.columns([0.5, 3, 2, 2])
+                with c1:
+                    st.markdown("❌")
+                with c2:
+                    st.markdown(f"**{r['original_name']}**")
+                with c3:
+                    st.caption(f"Hata: {r.get('error', '')[:40]}")
+
+        # Özet
+        st.markdown("")
         total_pages_all = sum(r["pages"] for r in successful)
         total_size_all = sum(r["size"] for r in successful)
 
         st.markdown(f"""
         <div class="status-card {'success' if not failed else ''}">
-            <h3>📊 Dönüştürme Özeti</h3>
-            <p>✅ Başarılı: <strong>{len(successful)}/{file_count}</strong> dosya</p>
-            <p>📄 Toplam: <strong>{total_pages_all}</strong> sayfa • <strong>{format_file_size(total_size_all)}</strong></p>
-            {'<p>❌ Başarısız: <strong>' + str(len(failed)) + '</strong> dosya</p>' if failed else ''}
+            <p>✅ <strong>{len(successful)}/{file_count}</strong> başarılı · 📄 <strong>{total_pages_all}</strong> sayfa · 💾 <strong>{format_file_size(total_size_all)}</strong></p>
         </div>
         """, unsafe_allow_html=True)
 
-        # Toplu ZIP indirme (2+ başarılı dosya varsa)
-        if len(successful) >= 2:
+        # ─── Tümünü İndir ───
+        if successful:
             st.markdown("")
-            zip_col1, zip_col2, zip_col3 = st.columns([1, 2, 1])
-            with zip_col2:
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_STORED) as zf:
-                    for r in successful:
-                        zf.writestr(r["filename"], r["pdf_bytes"])
-                zip_buffer.seek(0)
-
-                st.download_button(
-                    label=f"📦 Tümünü ZIP İndir ({len(successful)} PDF • {format_file_size(zip_buffer.getbuffer().nbytes)})",
-                    data=zip_buffer,
-                    file_name="fliphtml5_pdfs.zip",
-                    mime="application/zip",
-                    use_container_width=True,
-                    type="primary"
-                )
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if len(successful) >= 2:
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_STORED) as zf:
+                        for r in successful:
+                            zf.writestr(r["filename"], r["pdf_bytes"])
+                    zip_buffer.seek(0)
+                    st.download_button(
+                        f"📦 Tümünü İndir (ZIP · {format_file_size(zip_buffer.getbuffer().nbytes)})",
+                        data=zip_buffer, file_name="fliphtml5_pdfs.zip",
+                        mime="application/zip", use_container_width=True, type="primary"
+                    )
+                else:
+                    r = successful[0]
+                    st.download_button(
+                        f"📄 PDF İndir ({format_file_size(r['size'])})",
+                        data=r["pdf_bytes"], file_name=r["filename"],
+                        mime="application/pdf", use_container_width=True, type="primary"
+                    )
 
 else:
     st.markdown("")
